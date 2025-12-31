@@ -1,7 +1,13 @@
 const { getClient } = require('../config/supabase');
 const dayjs = require('dayjs');
 
-const getToken = (req) => req.headers.authorization;
+const getToken = (req) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+  return authHeader;
+};
 
 // Create subject with schedule
 exports.createSubject = async (req, res) => {
@@ -17,7 +23,55 @@ exports.createSubject = async (req, res) => {
     return res.status(401).json({ message: 'Unauthorized: No user ID' });
   }
 
-  const supabase = getClient(getToken(req));
+  if (!name || !name.trim()) {
+    console.error('❌ CREATE SUBJECT - No subject name provided');
+    return res.status(400).json({ message: 'Subject name is required' });
+  }
+
+  // Use the extracted token for the client
+  const token = getToken(req);
+  const supabase = getClient(token);
+
+  // Check if user exists in public.users to prevent FK violation
+  const { data: userExists, error: userCheckError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+
+  if (!userExists || userCheckError) {
+    console.log('ℹ️ User record missing in public.users. Attempting self-healing...');
+
+    // Attempt to fetch user details from Auth
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+
+    let email = 'unknown@example.com';
+    let name = 'User';
+
+    if (authData?.user) {
+      email = authData.user.email;
+      name = authData.user.user_metadata?.name || 'User';
+    } else {
+      console.warn('⚠️ Could not fetch user details from Auth:', authError?.message);
+      // Fallback: Proceed with dummy data to satisfy Foreign Key
+    }
+
+    const { error: insertError } = await supabase.from('users').upsert([{
+      id: userId,
+      email: email,
+      name: name,
+      password: 'managed-by-supabase' // Satisfy legacy NOT NULL constraint
+    }]);
+
+    if (insertError) {
+      console.error('❌ Failed to auto-create user:', insertError);
+      return res.status(500).json({
+        message: 'Failed to ensure user record exists: ' + insertError.message,
+        error: insertError.message
+      });
+    }
+    console.log('✅ Auto-created/Updated user record');
+  }
 
   try {
     // 1. Create Subject
@@ -79,7 +133,16 @@ exports.createSubject = async (req, res) => {
       hint: err.hint,
       stack: err.stack
     });
-    res.status(500).json({ message: 'Server error', error: err.message });
+
+    // Return detailed error info for debugging
+    res.status(500).json({
+      message: 'Server error creating subject',
+      error: err.message,
+      errorCode: err.code,
+      errorDetails: err.details,
+      errorHint: err.hint,
+      fullError: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 };
 exports.deleteSubject = async (req, res) => {

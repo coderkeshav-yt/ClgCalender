@@ -3,8 +3,8 @@ import api from "./api";
 
 export const attendanceService = {
   // Subject management
-  createSubject: (name, color, classesPerWeek, schedule) =>
-    api.post("/attendance/subject", { name, color, classesPerWeek, schedule }),
+  createSubject: (name, color, schedule) =>
+    api.post("/attendance/subject", { name, color, schedule }),
 
   listSubjects: () => api.get("/attendance/subjects"),
   deleteSubject: (id) => api.delete(`/attendance/subject/${id}`),

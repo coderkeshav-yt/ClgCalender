@@ -79,7 +79,6 @@ export const Schedule = () => {
       await attendanceService.createSubject(
         subjectData.name,
         subjectData.color,
-        subjectData.classesPerWeek,
         subjectData.schedule,
       );
       fetchData();

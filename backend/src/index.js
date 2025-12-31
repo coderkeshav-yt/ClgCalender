@@ -11,6 +11,7 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'http://localhost:3001', // Added for local development
     'https://clgcalender.vercel.app',
     /\.vercel\.app$/ // Allow all Vercel preview deployments
   ],
@@ -37,6 +38,21 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/exams', require('./routes/exams'));
 app.use('/api/seed', require('./routes/seed'));
+
+// TEST ENDPOINT - Visit http://localhost:5001/api/test-logs in your browser
+app.get('/api/test-logs', (req, res) => {
+  console.log('🧪 ========================================');
+  console.log('🧪 TEST ENDPOINT HIT!');
+  console.log('🧪 If you see this message, your backend terminal logging is working!');
+  console.log('🧪 Now try creating a subject and look for 📝 CREATE SUBJECT logs');
+  console.log('🧪 ========================================');
+  res.json({
+    success: true,
+    message: 'Check your BACKEND TERMINAL (not browser console) for log messages with 🧪',
+    instructions: 'Look for the PowerShell/CMD window running on port 5001',
+    timestamp: new Date().toISOString()
+  });
+});
 
 app.get('/', (req, res) => res.json({
   message: 'College Organizer Backend (Supabase)',
