@@ -6,22 +6,41 @@ const getToken = (req) => req.headers.authorization;
 // Create subject with schedule
 exports.createSubject = async (req, res) => {
   const { name, color, schedule } = req.body;
-  const userId = req.user.id;
+
+  console.log('📝 CREATE SUBJECT - Request body:', { name, color, scheduleLength: schedule?.length });
+  console.log('👤 CREATE SUBJECT - User:', req.user);
+
+  const userId = req.user?.id;
+
+  if (!userId) {
+    console.error('❌ CREATE SUBJECT - No user ID found');
+    return res.status(401).json({ message: 'Unauthorized: No user ID' });
+  }
+
   const supabase = getClient(getToken(req));
 
   try {
     // 1. Create Subject
+    console.log('📊 CREATE SUBJECT - Inserting subject:', { user_id: userId, name, color: color || '#34D399' });
+
     const { data: subject, error: subError } = await supabase
       .from('subjects')
       .insert([{ user_id: userId, name, color: color || '#34D399' }])
       .select()
       .single();
 
-    if (subError) throw subError;
+    if (subError) {
+      console.error('❌ CREATE SUBJECT - Subject insert error:', subError);
+      throw subError;
+    }
+
+    console.log('✅ CREATE SUBJECT - Subject created:', subject.id);
 
     // 2. Insert Weekly Schedule
     const validSchedule = schedule && Array.isArray(schedule) ? schedule : [];
     if (validSchedule.length > 0) {
+      console.log('📅 CREATE SUBJECT - Processing schedule:', validSchedule);
+
       const scheduleRows = validSchedule.map(slot => ({
         subject_id: subject.id,
         day: slot.day,
@@ -29,20 +48,38 @@ exports.createSubject = async (req, res) => {
         end_time: slot.endTime
       }));
 
+      console.log('📅 CREATE SUBJECT - Schedule rows to insert:', scheduleRows);
+
       const { error: schedError } = await supabase
         .from('weekly_schedule')
         .insert(scheduleRows);
 
       if (schedError) {
-        console.error('Error inserting schedule:', schedError);
+        console.error('❌ CREATE SUBJECT - Schedule insert error:', schedError);
+        console.error('❌ Error details:', {
+          message: schedError.message,
+          code: schedError.code,
+          details: schedError.details,
+          hint: schedError.hint
+        });
         // Don't fail the whole request, but log it
+      } else {
+        console.log('✅ CREATE SUBJECT - Schedule inserted successfully');
       }
     }
 
+    console.log('✅ CREATE SUBJECT - Returning subject:', subject);
     return res.json(subject);
   } catch (err) {
-    console.error('Create Subject Error:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ CREATE SUBJECT ERROR:', err);
+    console.error('❌ Error details:', {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+      hint: err.hint,
+      stack: err.stack
+    });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 exports.deleteSubject = async (req, res) => {
